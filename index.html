@@ -233,7 +233,7 @@ button.linkish{border:0;background:none;padding:6px 4px;text-decoration:underlin
         <div class="card-in">
           <div class="mast">
             <div class="paper">The Daily Departed</div>
-            <div class="dateline"><span id="c-day"></span><span>Deactivated Accounts Edition</span><span>Price: 1 standup</span></div>
+            <div class="dateline"><span id="c-day"></span><span>Deactivated Accounts Edition</span><span>daily-departed.com</span></div>
           </div>
           <div class="kicker">In Memoriam</div>
           <div class="who">
@@ -251,10 +251,10 @@ button.linkish{border:0;background:none;padding:6px 4px;text-decoration:underlin
             <div><b>In lieu of flowers</b><span id="c-flow"></span></div>
             <div><b>Services</b><span id="c-serv"></span></div>
           </div>
-          <div class="foot">Status: deactivated · Last seen: <span id="c-seen"></span><br>Write one for your departed → <a href="https://www.daily-departed.com">daily-departed.com</a></div>
+          <div class="foot">Status: deactivated · Last seen: <span id="c-seen"></span></div>
         </div>
       </article>
-      <div class="actions">
+      <div class="actions" id="share-row" hidden>
         <span class="share-lbl">Share the grief</span>
         <button type="button" class="primary" id="sh-native" hidden>Share…</button>
         <button type="button" id="sh-x">Post to X</button>
@@ -386,7 +386,7 @@ function render(d,o){
   const b=$('c-body'); b.replaceChildren(...o.paragraphs.map(t=>{const p=document.createElement('p');p.textContent=t;return p;}));
   $('c-surv').textContent=o.survived; $('c-flow').textContent=o.flowers; $('c-serv').textContent=o.services;
   $('c-seen').textContent=pick(['Friday, 4:58 PM','2 minutes before the all-hands','during a huddle','right after "quick question"']);
-  $('credit').textContent=source==='ai'?'Written with "Honor"':'Written from the template book';
+  $('credit').textContent=source==='ai'?'Written with "Honor"':'';
 }
 
 /* ---------- AI writer (lights up when available) ---------- */
@@ -426,7 +426,7 @@ async function write(){
   if(o){source='ai';} else {source='template'; o=templateObit(d,level);}
   render(d,o);
   $('write').textContent='Rewrite';
-  $('shuffle').hidden=false; $('meter').hidden=false;
+  $('shuffle').hidden=false; $('meter').hidden=false; $('share-row').hidden=false;
   $('status').textContent='';
   $('card').classList.remove('busy'); btns.forEach(b=>b.disabled=false);
 }
@@ -526,7 +526,7 @@ async function drawCard(){
   y+=36; x.fillRect(L,y,CW,2); y+=30; x.font=`500 18px ${MONO}`;
   x.textAlign='left'; x.fillText(today.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).toUpperCase(),L,y);
   x.textAlign='center'; x.fillText('DEACTIVATED ACCOUNTS EDITION',W/2,y);
-  x.textAlign='right'; x.fillText('PRICE: 1 STANDUP',R,y);
+  x.textAlign='right'; x.fillText('DAILY-DEPARTED.COM',R,y);
   y+=16; x.fillRect(L,y,CW,2);
   y+=52; x.textAlign='center'; x.fillStyle=SOFT; x.font=`500 20px ${MONO}`; x.fillText('I N   M E M O R I A M',W/2,y);
   // avatar
@@ -564,8 +564,8 @@ async function drawCard(){
     x.font=`${fs-4}px ${BODY}`; wrap(x,v,CW-230).forEach(l=>{x.fillText(l,L+230,y);y+=(fs-4)*1.36;}); y+=10;
   });
   x.fillStyle=INK; x.fillRect(L,H-130,CW,2);
-  x.fillStyle=INK; x.textAlign='center'; x.font=`500 22px ${MONO}`;
-  x.fillText('WRITE ONE FOR YOUR DEPARTED → DAILY-DEPARTED.COM',W/2,H-94);
+  x.fillStyle=SOFT; x.textAlign='center'; x.font=`500 18px ${MONO}`;
+  x.fillText('STATUS: DEACTIVATED · GONE FROM THE SIDEBAR, NEVER FROM OUR HEARTS',W/2,H-96);
   return c;
 }
 function roundRect(x,a,b,w,h,r){x.beginPath();x.moveTo(a+r,b);x.arcTo(a+w,b,a+w,b+h,r);x.arcTo(a+w,b+h,a,b+h,r);x.arcTo(a,b+h,a,b,r);x.arcTo(a,b,a+w,b,r);x.closePath();}
