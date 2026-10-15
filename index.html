@@ -22,6 +22,8 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:creator" content="@emilylonetto">
 <style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments)};</script>
+<script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -119,6 +121,8 @@ button.linkish{border:0;background:none;padding:6px 4px;text-decoration:underlin
 .extras b{font-family:var(--f-mono);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;font-weight:500;margin-right:6px}
 .foot{font-family:var(--f-mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;text-align:center;color:var(--ink-soft);border-top:1px solid var(--rule);padding-top:8px}
 .credit{font-family:var(--f-mono);font-size:.74rem;color:var(--muted)}
+.share-lbl{flex-basis:100%;font-family:var(--f-mono);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.foot a{color:inherit}
 @media (prefers-reduced-motion:no-preference){.card{transition:opacity .25s}.card.busy{opacity:.55}.card-in>:not(.mast){transition:opacity .38s ease}}
 .card.swap .card-in>:not(.mast){opacity:0}
 
@@ -247,12 +251,18 @@ button.linkish{border:0;background:none;padding:6px 4px;text-decoration:underlin
             <div><b>In lieu of flowers</b><span id="c-flow"></span></div>
             <div><b>Services</b><span id="c-serv"></span></div>
           </div>
-          <div class="foot">Status: deactivated · Last seen: <span id="c-seen"></span></div>
+          <div class="foot">Status: deactivated · Last seen: <span id="c-seen"></span><br>Write one for your departed → <a href="https://www.daily-departed.com">daily-departed.com</a></div>
         </div>
       </article>
       <div class="actions">
-        <button type="button" id="dl">Download card (PNG)</button>
-        <button type="button" id="copy">Copy text</button>
+        <span class="share-lbl">Share the grief</span>
+        <button type="button" class="primary" id="sh-native" hidden>Share…</button>
+        <button type="button" id="sh-x">Post to X</button>
+        <button type="button" id="sh-li">Post to LinkedIn</button>
+        <button type="button" id="sh-copy">Copy link</button>
+        <button type="button" id="dl">Download card</button>
+      </div>
+      <div class="actions">
         <span class="credit" id="credit"></span>
       </div>
     </div>
@@ -496,17 +506,6 @@ $('shuffle').addEventListener('click',()=>{ setLevel(level+1); Fire.burn(level,w
 $('calm').addEventListener('click',()=>{setLevel(0);Fire.stop();write();});
 
 /* ---------- copy ---------- */
-function plainText(){
-  const {d,o}=current;
-  return `IN MEMORIAM\n${d.name}${d.title?', '+d.title:''}\n${d.since||'????'} — ${fmtDate(today)}\n\n"${o.epitaph}"\n\n${o.paragraphs.join('\n\n')}\n\nSurvived by ${o.survived}\nIn lieu of flowers, ${o.flowers}\n${o.services}`;
-}
-$('copy').addEventListener('click',()=>{
-  const t=plainText();
-  navigator.clipboard.writeText(t).then(()=>flash('copy','Copied')).catch(()=>{
-    const r=document.createRange(); r.selectNodeContents($('card')); const s=getSelection(); s.removeAllRanges(); s.addRange(r);
-    $('status').textContent='Text selected. Press Ctrl/⌘+C to copy.';
-  });
-});
 function flash(id,msg){const b=$(id),o=b.textContent;b.textContent=msg;setTimeout(()=>b.textContent=o,1600);}
 
 /* ---------- PNG card ---------- */
@@ -565,21 +564,66 @@ async function drawCard(){
     x.font=`${fs-4}px ${BODY}`; wrap(x,v,CW-230).forEach(l=>{x.fillText(l,L+230,y);y+=(fs-4)*1.36;}); y+=10;
   });
   x.fillStyle=INK; x.fillRect(L,H-130,CW,2);
-  x.fillStyle=SOFT; x.textAlign='center'; x.font=`500 18px ${MONO}`;
-  x.fillText('STATUS: DEACTIVATED · GONE FROM THE SIDEBAR, NEVER FROM OUR HEARTS',W/2,H-96);
+  x.fillStyle=INK; x.textAlign='center'; x.font=`500 22px ${MONO}`;
+  x.fillText('WRITE ONE FOR YOUR DEPARTED → DAILY-DEPARTED.COM',W/2,H-94);
   return c;
 }
 function roundRect(x,a,b,w,h,r){x.beginPath();x.moveTo(a+r,b);x.arcTo(a+w,b,a+w,b+h,r);x.arcTo(a+w,b+h,a,b+h,r);x.arcTo(a,b+h,a,b,r);x.arcTo(a,b,a+w,b,r);x.closePath();}
+/* ---------- sharing ---------- */
+const SITE='https://www.daily-departed.com/';
+const CAUSE_SHORT={offer:'a better offer',startup:'founding a startup',competitor:'joining a competitor',sabbatical:'a sabbatical',
+  restructure:'a "restructuring"',boomerang:'temporary (allegedly)',unknown:'unknown'};
+const shareUrl=src=>`${SITE}?utm_source=${src}&utm_medium=social&utm_campaign=obituary_share`;
+function track(channel){ try{ window.va&&window.va('event',{name:'share',data:{channel}}); }catch(e){} }
+function facts(){
+  const {d,o}=current, yrs=d.since?` (${d.since}–${today.getFullYear()})`:'';
+  return {name:d.name+yrs, title:d.title, cause:CAUSE_SHORT[d.cause]||'unknown', epitaph:o.epitaph};
+}
+function caption(channel){
+  const f=facts();
+  if(channel==='x') return `RIP ${f.name}. Cause of death: ${f.cause}.\n\n"${f.epitaph}"\n\nWrite one for your departed coworker 🪦`;
+  if(channel==='linkedin') return `In loving memory of ${f.name}${f.title?', '+f.title:''}.\nCause of death: ${f.cause}.\n\n"${f.epitaph}"\n\nThey're not dead. They just work somewhere else. Write an obituary for your own departed coworker:\n${shareUrl('linkedin')}`;
+  return `🕯️ RIP ${f.name}. Cause of death: ${f.cause}.\n"${f.epitaph}"\nWrite one for your departed coworker: ${shareUrl(channel)}`;
+}
+function slug(){ return current.d.name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'coworker'; }
+async function cardBlob(){ const c=await drawCard(); return new Promise(r=>c.toBlob(r,'image/png')); }
+async function copy(text){ try{ await navigator.clipboard.writeText(text); return true; }catch(e){ return false; } }
+function say(msg){ $('status').textContent=msg; clearTimeout(say.t); say.t=setTimeout(()=>$('status').textContent='',6000); }
+function openOut(url){ const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; document.body.appendChild(a); a.click(); a.remove(); }
+
 $('dl').addEventListener('click',async()=>{
-  if(!current) return;
-  const c=await drawCard();
-  c.toBlob(blob=>{
-    const slug=current.d.name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'coworker';
-    const url=URL.createObjectURL(blob), a=document.createElement('a');
-    a.href=url; a.download=`obituary-${slug}.png`; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),4000);
-  },'image/png');
+  if(!current) return; track('download');
+  const blob=await cardBlob(), url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url; a.download=`obituary-${slug()}.png`; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
 });
+$('sh-x').addEventListener('click',()=>{
+  if(!current) return; track('x');
+  openOut(`https://twitter.com/intent/tweet?text=${encodeURIComponent(caption('x'))}&url=${encodeURIComponent(shareUrl('x'))}`);
+});
+$('sh-li').addEventListener('click',async()=>{
+  if(!current) return; track('linkedin');
+  const text=caption('linkedin'), copying=copy(text);   // start the copy, then open LinkedIn while the click still counts
+  openOut(`https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(text)}`);
+  if(await copying) say('Post copied too. If LinkedIn opens empty, just paste it in. Tip: attach the downloaded card.');
+});
+$('sh-copy').addEventListener('click',async()=>{
+  if(!current) return; track('copy');
+  if(await copy(caption('copy'))) flash('sh-copy','Copied');
+  else say('Copy didn’t work here. The link is '+shareUrl('copy'));
+});
+if(navigator.share){
+  $('sh-native').hidden=false;
+  $('sh-native').addEventListener('click',async()=>{
+    if(!current) return; track('native');
+    const text=caption('share');
+    try{
+      const file=new File([await cardBlob()],`obituary-${slug()}.png`,{type:'image/png'});
+      if(navigator.canShare&&navigator.canShare({files:[file]})) await navigator.share({files:[file],text});
+      else await navigator.share({text,url:shareUrl('share')});
+    }catch(e){ if(e&&e.name!=='AbortError') say('Sharing didn’t work here. Try Copy link instead.'); }
+  });
+}
 
 /* ---------- rotating examples on landing ---------- */
 const T=fmtDate(today);
