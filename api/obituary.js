@@ -55,6 +55,41 @@ In lieu of flowers: ${clip(f.flowers, 120) || '(invent something funny)'}
 Return only JSON: {"epitaph": one line under 12 words, "paragraphs": [3 short paragraphs, 35-60 words each, the first states name, title, departure date and cause], "survived": "Survived by" line without the label, "flowers": "In lieu of flowers" line without the label (use theirs if given), "services": one sentence about the memorial "service" in Slack terms}. Use the first name after the first paragraph. Do not use em dashes.`;
 }
 
+// One call to Claude. Thinking counts toward max_tokens, so leave plenty of room, and keep effort low for speed.
+let effortSupported = true;
+async function callClaude(prompt) {
+  const body = { model: MODEL, max_tokens: 4000, messages: [{ role: 'user', content: prompt }] };
+  if (effortSupported) body.output_config = { effort: 'low' };
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (r.status === 400 && effortSupported) {
+    const t = await r.text();
+    if (/effort|output_config/i.test(t)) { effortSupported = false; return callClaude(prompt); }   // model doesn't take effort: retry without it
+    console.error('Anthropic error', r.status, t); return null;
+  }
+  if (!r.ok) { console.error('Anthropic error', r.status, await r.text()); return null; }
+  return r.json();
+}
+
+async function writeOnce(prompt, attempt) {
+  const data = await callClaude(prompt);
+  if (!data) return null;
+  const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+  const start = text.indexOf('{'), end = text.lastIndexOf('}');
+  try {
+    if (start < 0 || end <= start) throw new Error('no JSON object');
+    const json = JSON.parse(text.slice(start, end + 1));
+    if (!Array.isArray(json.paragraphs) || !json.paragraphs.length || !json.epitaph) throw new Error('missing fields');
+    return json;
+  } catch (e) {
+    console.error(`Unreadable reply (attempt ${attempt}, stop_reason=${data.stop_reason}): ${e.message} :: ${text.slice(0, 300)}`);
+    return null;
+  }
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return res.status(405).json({ error: 'Use POST.' }); }
   const allowed = process.env.ALLOWED_ORIGIN;
@@ -69,20 +104,10 @@ module.exports = async (req, res) => {
   if (!fields || typeof fields !== 'object') return res.status(400).json({ error: 'Send the form fields as JSON.' });
 
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ model: MODEL, max_tokens: 900, messages: [{ role: 'user', content: buildPrompt(fields) }] }),
-    });
-    if (!r.ok) { console.error('Anthropic error', r.status, await r.text()); return res.status(502).json({ error: 'The writer is unavailable.' }); }
-    const data = await r.json();
-    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
-    const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
-    if (!json || !Array.isArray(json.paragraphs) || !json.epitaph) throw new Error('bad shape');
+    const prompt = buildPrompt(fields);
+    let json = null;
+    for (let attempt = 1; attempt <= 2 && !json; attempt++) json = await writeOnce(prompt, attempt);
+    if (!json) return res.status(502).json({ error: 'The writer is unavailable.' });
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({
       epitaph: clip(json.epitaph, 160),
