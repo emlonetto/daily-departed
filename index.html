@@ -130,6 +130,16 @@ button.linkish{border:0;background:none;padding:6px 4px;text-decoration:underlin
 .viewing #f{display:none}
 .viewing .desk{grid-template-columns:minmax(0,720px);justify-content:center}
 .viewing .notice-col{position:static}
+.emoji-field{position:relative;display:flex;flex-direction:column;gap:5px;min-width:0}
+.emoji-lbl{font-size:.92rem;font-weight:600}
+.emoji-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;font-size:1.25rem;font-weight:400;padding:5px 11px;border-radius:6px;text-align:left}
+.emoji-caret{font-size:.8rem;color:var(--muted)}
+.emoji-pop{position:absolute;z-index:30;top:100%;left:0;margin-top:6px;width:min(320px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 30px -10px rgba(0,0,0,.35);padding:10px;display:flex;flex-direction:column;gap:10px}
+.emoji-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:2px}
+.emoji-grid button{font-size:1.3rem;line-height:1;padding:6px 0;border:0;background:none;border-radius:6px;font-weight:400}
+.emoji-grid button:hover,.emoji-grid button[aria-pressed="true"]{background:var(--bg)}
+.emoji-own{font-size:.8rem;font-weight:500;color:var(--muted)}
+.emoji-own input{font-size:1.1rem}
 .share-lbl{flex-basis:100%;font-family:var(--f-mono);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .foot a{color:inherit}
 @media (prefers-reduced-motion:no-preference){.card{transition:opacity .25s}.card.busy{opacity:.55}.card-in>:not(.mast){transition:opacity .38s ease}}
@@ -189,7 +199,16 @@ button.linkish{border:0;background:none;padding:6px 4px;text-decoration:underlin
         </div>
         <div class="row">
           <label for="since">Joined (year)<input id="since" type="number" min="1990" max="2030" value="2021"></label>
-          <label for="emoji">Signature emoji<input id="emoji" value="🫠" maxlength="8"></label>
+          <div class="emoji-field">
+            <span class="emoji-lbl" id="emoji-lbl">Signature emoji</span>
+            <input type="hidden" id="emoji" value="🫠">
+            <button type="button" class="emoji-btn" id="emoji-btn" aria-haspopup="dialog" aria-expanded="false" aria-labelledby="emoji-lbl emoji-face"><span id="emoji-face">🫠</span><span class="emoji-caret" aria-hidden="true">▾</span></button>
+            <div class="emoji-pop" id="emoji-pop" role="dialog" aria-label="Pick a signature emoji" hidden>
+              <div class="emoji-grid" id="emoji-grid"></div>
+              <label for="emoji-own" class="emoji-own">Or paste any emoji<input id="emoji-own" maxlength="8" placeholder="e.g. 🦖" autocomplete="off"></label>
+              <button type="button" class="linkish" id="emoji-none">No emoji</button>
+            </div>
+          </div>
         </div>
         <label for="cause">Cause of departure
           <select id="cause">
@@ -311,6 +330,43 @@ function read(){
 /* ---------- tone hint ---------- */
 const HINTS={warm:'Sweet and sentimental, with jokes.',roast:'Affectionate teasing about their quirks and habits.',corporate:'Deadpan parody of the "please join me in wishing them well" email.'};
 document.querySelectorAll('input[name=tone]').forEach(r=>r.addEventListener('change',()=>{$('tone-hint').textContent=HINTS[r.value];}));
+
+/* ---------- signature emoji picker ---------- */
+const EMOJIS=[['🫠','melting face'],['💀','skull'],['😭','loudly crying'],['🫡','salute'],['🙃','upside-down face'],['😅','sweat smile'],['🥲','smiling with tear'],['😬','grimacing'],
+  ['🤡','clown'],['👀','eyes'],['🙏','folded hands'],['🤝','handshake'],['🤦','facepalm'],['🤷','shrug'],['💅','nail polish'],['🧠','brain'],
+  ['🔥','fire'],['🚀','rocket'],['🎉','party popper'],['✨','sparkles'],['💯','hundred'],['✅','check mark'],['❌','cross mark'],['⚠️','warning'],
+  ['🚨','siren'],['🧯','fire extinguisher'],['🐛','bug'],['🔧','wrench'],['📈','chart up'],['📉','chart down'],['📌','pushpin'],['🧵','thread'],
+  ['☕','coffee'],['🧋','bubble tea'],['🍕','pizza'],['🌮','taco'],['🐐','goat'],['🦄','unicorn'],['👑','crown'],['🎯','bullseye'],
+  ['📣','megaphone'],['💼','briefcase'],['🏃','running'],['💤','zzz'],['👻','ghost'],['😇','halo'],['🌈','rainbow'],['🪦','headstone']];
+function syncEmoji(){
+  const v=$('emoji').value;
+  $('emoji-face').textContent=v||'None';
+  document.querySelectorAll('#emoji-grid button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.e===v)));
+}
+function setEmoji(v){ $('emoji').value=v; $('emoji-own').value=''; syncEmoji(); closeEmoji(true); }
+function openEmoji(){
+  $('emoji-pop').hidden=false; $('emoji-btn').setAttribute('aria-expanded','true');
+  (document.querySelector('#emoji-grid button[aria-pressed="true"]')||document.querySelector('#emoji-grid button')).focus();
+}
+function closeEmoji(refocus){
+  if($('emoji-pop').hidden) return;
+  $('emoji-pop').hidden=true; $('emoji-btn').setAttribute('aria-expanded','false');
+  if(refocus) $('emoji-btn').focus();
+}
+$('emoji-grid').innerHTML=EMOJIS.map(([e,n])=>`<button type="button" data-e="${e}" aria-label="${n}" title="${n}">${e}</button>`).join('');
+$('emoji-grid').addEventListener('click',e=>{ const b=e.target.closest('button'); if(b) setEmoji(b.dataset.e); });
+$('emoji-grid').addEventListener('keydown',e=>{   // arrow keys move around the grid
+  const all=[...document.querySelectorAll('#emoji-grid button')], i=all.indexOf(document.activeElement); if(i<0) return;
+  const step={ArrowRight:1,ArrowLeft:-1,ArrowDown:8,ArrowUp:-8}[e.key]; if(!step) return;
+  e.preventDefault(); const n=all[i+step]; if(n) n.focus();
+});
+$('emoji-btn').addEventListener('click',()=>$('emoji-pop').hidden?openEmoji():closeEmoji(false));
+$('emoji-own').addEventListener('input',e=>{ const v=e.target.value.trim(); if(v){ $('emoji').value=v; syncEmoji(); } });
+$('emoji-own').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); closeEmoji(true); } });
+$('emoji-none').addEventListener('click',()=>setEmoji(''));
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeEmoji(true); });
+document.addEventListener('pointerdown',e=>{ if(!e.target.closest('.emoji-field')) closeEmoji(false); });
+syncEmoji();
 
 /* ---------- profile photo ---------- */
 let photo=null; // {url, img}
@@ -755,6 +811,7 @@ const EXAMPLES=[
 let exIdx=0, exTimer=null, exPaused=false, rotating=true;
 function fillForm(d){
   for(const k of ['name','title','since','emoji','known','last','channels']) $(k).value=d[k];
+  syncEmoji();
   $('flowers').value=''; $('cause').value=d.cause;
   const r=document.querySelector(`input[name=tone][value=${d.tone}]`); if(r){r.checked=true;$('tone-hint').textContent=HINTS[d.tone];}
   if(!photo) $('ph-prev').textContent=initials(d.name);
