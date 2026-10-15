@@ -1,0 +1,6 @@
+{
+  "name": "the-daily-departed",
+  "private": true,
+  "description": "Mock newspaper obituaries for coworkers who left.",
+  "engines": { "node": ">=18" }
+}
