@@ -6,6 +6,7 @@
 //   ANTHROPIC_MODEL     optional. Defaults to claude-haiku-5-5 (fast and cheap).
 //   ALLOWED_ORIGIN      optional. e.g. https://yourdomain.com — rejects calls from other sites.
 
+const { canonical, sign } = require('./_shared');
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5';
 
 // Best-effort rate limit: 15 obituaries per visitor per 10 minutes (per server instance).
@@ -108,13 +109,19 @@ module.exports = async (req, res) => {
     let json = null;
     for (let attempt = 1; attempt <= 2 && !json; attempt++) json = await writeOnce(prompt, attempt);
     if (!json) return res.status(502).json({ error: 'The writer is unavailable.' });
+    // The finished obituary, plus a signed record so the page can publish exactly this text as a share link.
+    const record = canonical({
+      name: fields.name, title: fields.title, since: fields.since, departed: fields.departed, cause: fields.causeKey,
+      epitaph: json.epitaph, paragraphs: json.paragraphs, survived: json.survived, flowers: json.flowers, services: json.services,
+    });
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({
-      epitaph: clip(json.epitaph, 160),
-      paragraphs: json.paragraphs.slice(0, 3).map(p => clip(p, 700)),
-      survived: clip(json.survived, 300),
-      flowers: clip(json.flowers, 300),
-      services: clip(json.services, 300),
+      epitaph: record.epitaph,
+      paragraphs: record.paragraphs,
+      survived: record.survived,
+      flowers: record.flowers,
+      services: record.services,
+      share: { record, sig: sign(record) },
     });
   } catch (e) {
     console.error(e);

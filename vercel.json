@@ -1,0 +1,10 @@
+{
+  "rewrites": [
+    { "source": "/o/:id/card.png", "destination": "/api/og?id=:id" },
+    { "source": "/o/:id", "destination": "/api/page?id=:id" }
+  ],
+  "functions": {
+    "api/page.js": { "includeFiles": "index.html" },
+    "api/og.mjs": { "includeFiles": "fonts/**" }
+  }
+}

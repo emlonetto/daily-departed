@@ -121,6 +121,15 @@ button.linkish{border:0;background:none;padding:6px 4px;text-decoration:underlin
 .extras b{font-family:var(--f-mono);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;font-weight:500;margin-right:6px}
 .foot{font-family:var(--f-mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;text-align:center;color:var(--ink-soft);border-top:1px solid var(--rule);padding-top:8px}
 .credit{font-family:var(--f-mono);font-size:.74rem;color:var(--muted)}
+.linkbar{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;font-size:.9rem;color:var(--muted)}
+.linkbar a{color:var(--fg);word-break:break-all}
+.viewbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px}
+.viewbar p{margin:0;font-style:italic;color:var(--muted)}
+.cta{display:inline-block;background:var(--accent);color:var(--accent-fg);text-decoration:none;font-weight:600;border-radius:6px;padding:12px 18px}
+.cta:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.viewing #f{display:none}
+.viewing .desk{grid-template-columns:minmax(0,720px);justify-content:center}
+.viewing .notice-col{position:static}
 .share-lbl{flex-basis:100%;font-family:var(--f-mono);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .foot a{color:inherit}
 @media (prefers-reduced-motion:no-preference){.card{transition:opacity .25s}.card.busy{opacity:.55}.card-in>:not(.mast){transition:opacity .38s ease}}
@@ -229,6 +238,10 @@ button.linkish{border:0;background:none;padding:6px 4px;text-decoration:underlin
     </form>
 
     <div class="notice-col">
+      <div class="viewbar" id="viewbar" hidden>
+        <p>A coworker wrote this in loving memory.</p>
+        <a class="cta" href="/">Write one for your own departed coworker →</a>
+      </div>
       <article class="card" id="card" aria-label="Obituary notice">
         <div class="card-in">
           <div class="mast">
@@ -261,6 +274,11 @@ button.linkish{border:0;background:none;padding:6px 4px;text-decoration:underlin
         <button type="button" id="sh-li">Post to LinkedIn</button>
         <button type="button" id="sh-copy">Copy link</button>
         <button type="button" id="dl">Download card</button>
+      </div>
+      <div class="linkbar" id="linkbar" hidden>
+        <span>Your obituary’s link: <a id="lk" href="#" target="_blank" rel="noopener"></a></span>
+        <button type="button" class="linkish" id="lk-del">Delete this obituary</button>
+        <span id="lk-confirm" hidden>Delete it for good? <button type="button" class="linkish" id="lk-yes">Yes, delete</button> <button type="button" class="linkish" id="lk-no">Keep it</button></span>
       </div>
       <div class="actions">
         <span class="credit" id="credit"></span>
@@ -381,7 +399,7 @@ function render(d,o){
   $('c-av').textContent=photo?'':initials(d.name);
   $('c-name').textContent=d.name;
   $('c-role').textContent=d.title||'';
-  $('c-dates').textContent=`${d.since||'Joined ????'} — ${fmtDate(today)}`;
+  $('c-dates').textContent=`${d.since||'Joined ????'} — ${d.departed||fmtDate(today)}`;
   $('c-epi').textContent=o.epitaph;
   const b=$('c-body'); b.replaceChildren(...o.paragraphs.map(t=>{const p=document.createElement('p');p.textContent=t;return p;}));
   $('c-surv').textContent=o.survived; $('c-flow').textContent=o.flowers; $('c-serv').textContent=o.services;
@@ -394,14 +412,14 @@ async function aiObit(d,level=0){
   try{
     const ctl=new AbortController(), timer=setTimeout(()=>ctl.abort(),25000);
     const res=await fetch('/api/obituary',{method:'POST',headers:{'content-type':'application/json'},signal:ctl.signal,
-      body:JSON.stringify({name:d.name,title:d.title,since:d.since,emoji:d.emoji,cause:d.causeLabel,known:d.known,last:d.last,
+      body:JSON.stringify({name:d.name,title:d.title,since:d.since,emoji:d.emoji,cause:d.causeLabel,causeKey:d.cause,known:d.known,last:d.last,
         channels:d.channels,flowers:d.flowers,tone:d.tone,level,departed:fmtDate(today)})});
     clearTimeout(timer);
     if(!res.ok) return null;
     const r=await res.json();
     if(r&&Array.isArray(r.paragraphs)&&r.paragraphs.length&&r.epitaph) return {
       epitaph:String(r.epitaph),paragraphs:r.paragraphs.slice(0,3).map(String),
-      survived:String(r.survived||''),flowers:String(r.flowers||d.flowers||pick(FLOWERS)),services:String(r.services||pick(SERVICES))};
+      survived:String(r.survived||''),flowers:String(r.flowers||d.flowers||pick(FLOWERS)),services:String(r.services||pick(SERVICES)),share:r.share||null};
   }catch(e){}
   return null;   // any failure falls back to the template book
 }
@@ -426,7 +444,7 @@ async function write(){
   if(o){source='ai';} else {source='template'; o=templateObit(d,level);}
   render(d,o);
   $('write').textContent='Rewrite';
-  $('shuffle').hidden=false; $('meter').hidden=false; $('share-row').hidden=false;
+  $('shuffle').hidden=false; $('meter').hidden=false; $('share-row').hidden=false; showLinkBar();
   $('status').textContent='';
   $('card').classList.remove('busy'); btns.forEach(b=>b.disabled=false);
 }
@@ -543,7 +561,7 @@ async function drawCard(){
   let ns=66; x.font=`800 ${ns}px ${BODY}`; while(x.measureText(d.name).width>tw&&ns>36){ns-=2;x.font=`800 ${ns}px ${BODY}`;}
   x.fillText(d.name,tx,y+62);
   x.fillStyle=SOFT; x.font=`italic 30px ${BODY}`; x.fillText(d.title||'',tx,y+104,tw);
-  x.fillStyle=INK; x.font=`22px ${MONO}`; x.fillText(`${d.since||'????'} — ${fmtDate(today)}`,tx,y+140);
+  x.fillStyle=INK; x.font=`22px ${MONO}`; x.fillText(`${d.since||'????'} — ${d.departed||fmtDate(today)}`,tx,y+140);
   y+=av+40;
   // epitaph
   x.fillRect(L,y,CW,2); x.font=`italic 34px ${BODY}`; x.textAlign='center';
@@ -573,23 +591,50 @@ function roundRect(x,a,b,w,h,r){x.beginPath();x.moveTo(a+r,b);x.arcTo(a+w,b,a+w,
 const SITE='https://www.daily-departed.com/';
 const CAUSE_SHORT={offer:'a better offer',startup:'founding a startup',competitor:'joining a competitor',sabbatical:'a sabbatical',
   restructure:'a "restructuring"',boomerang:'temporary (allegedly)',unknown:'unknown'};
-const shareUrl=src=>`${SITE}?utm_source=${src}&utm_medium=social&utm_campaign=obituary_share`;
+const withUtm=(base,src)=>`${base}?utm_source=${src}&utm_medium=social&utm_campaign=obituary_share`;
+const shareUrl=src=>withUtm(current&&current.link||SITE,src);
 function track(channel){ try{ window.va&&window.va('event',{name:'share',data:{channel}}); }catch(e){} }
 function facts(){
-  const {d,o}=current, yrs=d.since?` (${d.since}–${today.getFullYear()})`:'';
+  const {d,o}=current, yr=(String(d.departed||'').match(/\d{4}/)||[today.getFullYear()])[0], yrs=d.since?` (${d.since}–${yr})`:'';
   return {name:d.name+yrs, title:d.title, cause:CAUSE_SHORT[d.cause]||'unknown', epitaph:o.epitaph};
 }
 function caption(channel){
   const f=facts();
   if(channel==='x') return `RIP ${f.name}. Cause of death: ${f.cause}.\n\n"${f.epitaph}"\n\nWrite one for your departed coworker 🪦`;
-  if(channel==='linkedin') return `In loving memory of ${f.name}${f.title?', '+f.title:''}.\nCause of death: ${f.cause}.\n\n"${f.epitaph}"\n\nThey're not dead. They just work somewhere else. Write an obituary for your own departed coworker:\n${shareUrl('linkedin')}`;
-  return `🕯️ RIP ${f.name}. Cause of death: ${f.cause}.\n"${f.epitaph}"\nWrite one for your departed coworker: ${shareUrl(channel)}`;
+  if(channel==='linkedin') return `In loving memory of ${f.name}${f.title?', '+f.title:''}.\nCause of death: ${f.cause}.\n\n"${f.epitaph}"\n\nThey're not dead. They just work somewhere else. Pay your respects or write one for your own departed coworker:\n${shareUrl('linkedin')}`;
+  return `🕯️ RIP ${f.name}. Cause of death: ${f.cause}.\n"${f.epitaph}"\n${shareUrl(channel)}`;
 }
 function slug(){ return current.d.name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'coworker'; }
 async function cardBlob(){ const c=await drawCard(); return new Promise(r=>c.toBlob(r,'image/png')); }
 async function copy(text){ try{ await navigator.clipboard.writeText(text); return true; }catch(e){ return false; } }
-function say(msg){ $('status').textContent=msg; clearTimeout(say.t); say.t=setTimeout(()=>$('status').textContent='',6000); }
+function say(msg){ $('status').textContent=msg; clearTimeout(say.t); say.t=setTimeout(()=>$('status').textContent='',7000); }
 function openOut(url){ const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; document.body.appendChild(a); a.click(); a.remove(); }
+
+/* delete tokens live only in this browser, so only the author can take a page down */
+const TOK='dd-delete-tokens';
+function tokens(){ try{ return JSON.parse(localStorage.getItem(TOK)||'{}'); }catch(e){ return {}; } }
+function saveToken(id,t){ try{ const all=tokens(); if(t) all[id]=t; else delete all[id]; localStorage.setItem(TOK,JSON.stringify(all)); }catch(e){} }
+function showLinkBar(){
+  const id=current&&current.linkId;
+  if(!id||!tokens()[id]){ $('linkbar').hidden=true; return; }
+  $('lk').href=current.link; $('lk').textContent=current.link.replace('https://www.','');
+  $('lk-confirm').hidden=true; $('lk-del').hidden=false; $('linkbar').hidden=false;
+}
+/* Publish this obituary once, the first time someone shares it. Only AI-written ones carry a signed record. */
+function ensureLink(){
+  const cur=current;
+  if(!cur) return Promise.resolve(null);
+  if(cur.link) return Promise.resolve(cur.link);
+  if(!cur.o.share) return Promise.resolve(null);
+  if(!cur.linkP) cur.linkP=fetch('/api/share',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(cur.o.share)})
+    .then(r=>r.ok?r.json():null).then(j=>{
+      if(!j||!j.id){ cur.linkP=null; return null; }
+      cur.link=j.url; cur.linkId=j.id; saveToken(j.id,j.deleteToken); if(cur===current) showLinkBar(); return j.url;
+    }).catch(()=>{ cur.linkP=null; return null; });
+  return cur.linkP;
+}
+// start publishing the moment a finger or pointer lands on a share button, so the link is ready by the click
+['sh-native','sh-x','sh-li','sh-copy'].forEach(id=>['pointerdown','touchstart','keydown'].forEach(ev=>$(id).addEventListener(ev,()=>{ ensureLink(); },{passive:true})));
 
 $('dl').addEventListener('click',async()=>{
   if(!current) return; track('download');
@@ -597,33 +642,61 @@ $('dl').addEventListener('click',async()=>{
   a.href=url; a.download=`obituary-${slug()}.png`; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),4000);
 });
+async function openAfterLink(makeUrl){
+  const w=window.open('about:blank','_blank');           // open now, while the click still counts
+  await ensureLink();
+  const url=makeUrl();
+  if(w){ try{ w.opener=null; w.location.href=url; return; }catch(e){} }
+  openOut(url);
+}
 $('sh-x').addEventListener('click',()=>{
   if(!current) return; track('x');
-  openOut(`https://twitter.com/intent/tweet?text=${encodeURIComponent(caption('x'))}&url=${encodeURIComponent(shareUrl('x'))}`);
+  openAfterLink(()=>`https://twitter.com/intent/tweet?text=${encodeURIComponent(caption('x'))}&url=${encodeURIComponent(shareUrl('x'))}`);
 });
 $('sh-li').addEventListener('click',async()=>{
   if(!current) return; track('linkedin');
-  const text=caption('linkedin'), copying=copy(text);   // start the copy, then open LinkedIn while the click still counts
-  openOut(`https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(text)}`);
-  if(await copying) say('Post copied too. If LinkedIn opens empty, just paste it in. Tip: attach the downloaded card.');
+  await openAfterLink(()=>`https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(caption('linkedin'))}`);
+  if(await copy(caption('linkedin'))) say('Post copied too. If LinkedIn opens empty, just paste it in.');
 });
 $('sh-copy').addEventListener('click',async()=>{
   if(!current) return; track('copy');
-  if(await copy(caption('copy'))) flash('sh-copy','Copied');
+  let ok=false;
+  if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){
+    try{ await navigator.clipboard.write([new ClipboardItem({'text/plain':ensureLink().then(()=>new Blob([caption('copy')],{type:'text/plain'}))})]); ok=true; }catch(e){}
+  }
+  if(!ok){ await ensureLink(); ok=await copy(caption('copy')); }
+  if(ok) flash('sh-copy','Copied');
   else say('Copy didn’t work here. The link is '+shareUrl('copy'));
 });
 if(navigator.share){
   $('sh-native').hidden=false;
   $('sh-native').addEventListener('click',async()=>{
     if(!current) return; track('native');
-    const text=caption('share');
     try{
-      const file=new File([await cardBlob()],`obituary-${slug()}.png`,{type:'image/png'});
+      const [blob]=await Promise.all([cardBlob(),ensureLink()]);
+      const text=caption('share'), file=new File([blob],`obituary-${slug()}.png`,{type:'image/png'});
       if(navigator.canShare&&navigator.canShare({files:[file]})) await navigator.share({files:[file],text});
       else await navigator.share({text,url:shareUrl('share')});
-    }catch(e){ if(e&&e.name!=='AbortError') say('Sharing didn’t work here. Try Copy link instead.'); }
+    }catch(e){
+      if(e&&e.name==='NotAllowedError') say('Your link is ready. Tap Share again.');
+      else if(e&&e.name!=='AbortError') say('Sharing didn’t work here. Try Copy link instead.');
+    }
   });
 }
+$('lk-del').addEventListener('click',()=>{ $('lk-del').hidden=true; $('lk-confirm').hidden=false; });
+$('lk-no').addEventListener('click',()=>{ $('lk-confirm').hidden=true; $('lk-del').hidden=false; });
+$('lk-yes').addEventListener('click',async()=>{
+  const id=current&&current.linkId, token=tokens()[id];
+  if(!id||!token) return;
+  try{
+    const r=await fetch('/api/share',{method:'DELETE',headers:{'content-type':'application/json'},body:JSON.stringify({id,token})});
+    if(!r.ok) throw new Error();
+    saveToken(id,null); current.link=null; current.linkId=null; current.linkP=null; $('linkbar').hidden=true;
+    if(window.__OBIT__){ location.href='/'; return; }
+    current.o.share=null;   // it stays deleted: sharing again points to the home page
+    say('Deleted. That obituary has been laid to rest for good.');
+  }catch(e){ say('Couldn’t delete it just now. Try again in a moment.'); }
+});
 
 /* ---------- rotating examples on landing ---------- */
 const T=fmtDate(today);
@@ -702,12 +775,23 @@ function stopRotation(){
   $('card').classList.remove('swap');
   $('credit').textContent='Example notice. Edit the form and write your own.';
 }
-exTimer=setInterval(()=>{ if(rotating&&!exPaused&&!document.hidden) showExample((exIdx+1)%EXAMPLES.length,true); },6500);
-$('card').addEventListener('mouseenter',()=>exPaused=true);
-$('card').addEventListener('mouseleave',()=>exPaused=false);
-$('f').addEventListener('focusin',stopRotation);
-$('f').addEventListener('pointerdown',stopRotation);
-showExample(0,false);
+function viewMode({id,record:r}){
+  rotating=false; document.body.classList.add('viewing');
+  const d={name:r.name,first:r.name.split(/\s+/)[0],title:r.title,since:r.since,departed:r.departed,cause:r.cause};
+  source='ai';
+  render(d,{epitaph:r.epitaph,paragraphs:r.paragraphs,survived:r.survived,flowers:r.flowers,services:r.services,share:null});
+  current.link=SITE+'o/'+id; current.linkId=id;
+  $('viewbar').hidden=false; $('share-row').hidden=false; showLinkBar();
+}
+if(window.__OBIT__) viewMode(window.__OBIT__);
+else{
+  exTimer=setInterval(()=>{ if(rotating&&!exPaused&&!document.hidden) showExample((exIdx+1)%EXAMPLES.length,true); },6500);
+  $('card').addEventListener('mouseenter',()=>exPaused=true);
+  $('card').addEventListener('mouseleave',()=>exPaused=false);
+  $('f').addEventListener('focusin',stopRotation);
+  $('f').addEventListener('pointerdown',stopRotation);
+  showExample(0,false);
+}
 })();
 </script>
 
