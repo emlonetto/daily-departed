@@ -378,6 +378,7 @@ function setPhoto(p){
     el.textContent=p?'':initials(read().name);
   }
   $('ph-rm').hidden=!p;
+  if(current&&current.link&&!window.__OBIT__){ current.link=null; current.linkId=null; current.linkP=null; showLinkBar(); }
 }
 $('photo').addEventListener('change',e=>{
   const f=e.target.files&&e.target.files[0]; if(!f) return;
@@ -649,6 +650,7 @@ const CAUSE_SHORT={offer:'a better offer',startup:'founding a startup',competito
   restructure:'a "restructuring"',boomerang:'temporary (allegedly)',unknown:'unknown'};
 const withUtm=(base,src)=>`${base}?utm_source=${src}&utm_medium=social&utm_campaign=obituary_share`;
 const shareUrl=src=>withUtm(current&&current.link||SITE,src);
+const cleanLink=()=>current&&current.link||SITE.replace(/\/$/,'');
 function track(channel){ try{ window.va&&window.va('event',{name:'share',data:{channel}}); }catch(e){} }
 function facts(){
   const {d,o}=current, yr=(String(d.departed||'').match(/\d{4}/)||[today.getFullYear()])[0], yrs=d.since?` (${d.since}–${yr})`:'';
@@ -670,6 +672,13 @@ function openOut(url){ const a=document.createElement('a'); a.href=url; a.target
 const TOK='dd-delete-tokens';
 function tokens(){ try{ return JSON.parse(localStorage.getItem(TOK)||'{}'); }catch(e){ return {}; } }
 function saveToken(id,t){ try{ const all=tokens(); if(t) all[id]=t; else delete all[id]; localStorage.setItem(TOK,JSON.stringify(all)); }catch(e){} }
+/* a small square copy of the (already grayscale) photo for the shared page and preview card */
+function sharePhoto(){
+  if(!photo||!photo.img) return null;
+  const im=photo.img, S=320, c=document.createElement('canvas'), x=c.getContext('2d'), k=Math.max(S/im.width,S/im.height);
+  c.width=c.height=S; x.drawImage(im,(S-im.width*k)/2,(S-im.height*k)/2,im.width*k,im.height*k);
+  return c.toDataURL('image/jpeg',.82);
+}
 function showLinkBar(){
   const id=current&&current.linkId;
   if(!id||!tokens()[id]){ $('linkbar').hidden=true; return; }
@@ -682,7 +691,7 @@ function ensureLink(){
   if(!cur) return Promise.resolve(null);
   if(cur.link) return Promise.resolve(cur.link);
   if(!cur.o.share) return Promise.resolve(null);
-  if(!cur.linkP) cur.linkP=fetch('/api/share',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(cur.o.share)})
+  if(!cur.linkP) cur.linkP=fetch('/api/share',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...cur.o.share,photo:sharePhoto()})})
     .then(r=>r.ok?r.json():null).then(j=>{
       if(!j||!j.id){ cur.linkP=null; return null; }
       cur.link=j.url; cur.linkId=j.id; saveToken(j.id,j.deleteToken); if(cur===current) showLinkBar(); return j.url;
@@ -718,10 +727,10 @@ $('sh-copy').addEventListener('click',async()=>{
   if(!current) return; track('copy');
   let ok=false;
   if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){
-    try{ await navigator.clipboard.write([new ClipboardItem({'text/plain':ensureLink().then(()=>new Blob([caption('copy')],{type:'text/plain'}))})]); ok=true; }catch(e){}
+    try{ await navigator.clipboard.write([new ClipboardItem({'text/plain':ensureLink().then(()=>new Blob([cleanLink()],{type:'text/plain'}))})]); ok=true; }catch(e){}
   }
-  if(!ok){ await ensureLink(); ok=await copy(caption('copy')); }
-  if(ok) flash('sh-copy','Copied');
+  if(!ok){ await ensureLink(); ok=await copy(cleanLink()); }
+  if(ok) flash('sh-copy','Link copied');
   else say('Copy didn’t work here. The link is '+shareUrl('copy'));
 });
 if(navigator.share){
@@ -838,6 +847,7 @@ function viewMode({id,record:r}){
   source='ai';
   render(d,{epitaph:r.epitaph,paragraphs:r.paragraphs,survived:r.survived,flowers:r.flowers,services:r.services,share:null});
   current.link=SITE+'o/'+id; current.linkId=id;
+  if(r.photo){ const im=new Image(); im.onload=()=>{ const keep={link:current.link,linkId:current.linkId}; setPhoto({url:r.photo,img:im}); Object.assign(current,keep); }; im.src=r.photo; }
   $('viewbar').hidden=false; $('share-row').hidden=false; showLinkBar();
 }
 if(window.__OBIT__) viewMode(window.__OBIT__);
