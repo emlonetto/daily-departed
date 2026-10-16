@@ -25,6 +25,8 @@ module.exports = async (req, res) => {
       if (!b.record || !verify(b.record, b.sig)) return res.status(400).json({ error: 'Only obituaries written on this site can be shared.' });
       if (limited(ipOf(req))) return res.status(429).json({ error: 'That is a lot of grief. Try again in a bit.' });
       const record = canonical(b.record), token = newId(24);
+      // Optional photo: a small JPEG made by the page. Anything else is dropped.
+      if (typeof b.photo === 'string' && b.photo.length <= 150000 && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(b.photo)) record.photo = b.photo;
       let id;
       for (let i = 0; i < 5; i++) {            // NX = only if the id is free
         id = newId(8);

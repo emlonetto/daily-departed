@@ -38,10 +38,13 @@ function card(r) {
         h('div', { justifyContent: 'space-between' }, [mono('In memoriam'), mono('Deactivated accounts edition'), mono('daily-departed.com')]),
         rule,
         h('div', { flex: 1 }, []),
-        h('div', { flexDirection: 'column', alignItems: 'center', gap: 6 }, [
-          h('div', { fontFamily: 'News', fontWeight: 800, fontSize: nameSize, color: INK, lineHeight: 1.02, textAlign: 'center' }, name),
-          r.title ? h('div', { fontFamily: 'News', fontStyle: 'italic', fontSize: 30, color: SOFT }, plain(r.title)) : null,
-          mono(yrs, { fontSize: 20, letterSpacing: 1 }),
+        h('div', { justifyContent: 'center', alignItems: 'center', gap: 32 }, [
+          r.photo ? { type: 'img', props: { src: r.photo, width: 170, height: 170, style: { borderRadius: 16, objectFit: 'cover', border: `2px solid ${INK}` } } } : null,
+          h('div', { flexDirection: 'column', alignItems: r.photo ? 'flex-start' : 'center', gap: 6, maxWidth: r.photo ? 820 : 1040 }, [
+            h('div', { fontFamily: 'News', fontWeight: 800, fontSize: nameSize, color: INK, lineHeight: 1.02, textAlign: r.photo ? 'left' : 'center' }, name),
+            r.title ? h('div', { fontFamily: 'News', fontStyle: 'italic', fontSize: 30, color: SOFT }, plain(r.title)) : null,
+            mono(yrs, { fontSize: 20, letterSpacing: 1 }),
+          ].filter(Boolean)),
         ].filter(Boolean)),
         h('div', { flex: 1 }, []),
         h('div', { borderTop: `2px solid ${INK}`, borderBottom: `2px solid ${INK}`, padding: '14px 10px', justifyContent: 'center' }, [
